@@ -407,7 +407,7 @@ where
 {
     /// Creates a new `Kademlia` network behaviour with a default configuration.
     pub fn new(id: PeerId, store: TStore) -> Self {
-        Self::with_config(id, store, Default::default())
+        Self::with_config(id, store, Default::default(), None)
     }
 
     /// Get the protocol name of this kademlia instance.
@@ -416,7 +416,12 @@ where
     }
 
     /// Creates a new `Kademlia` network behaviour with the given configuration.
-    pub fn with_config(id: PeerId, store: TStore, config: KademliaConfig) -> Self {
+    pub fn with_config(
+        id: PeerId,
+        store: TStore,
+        config: KademliaConfig,
+        replication_strategy: Option<RecordReplicationStrategy>,
+    ) -> Self {
         let local_key = kbucket_priv::Key::from(id);
 
         let put_record_job = config
@@ -428,7 +433,7 @@ where
                     interval,
                     config.record_publication_interval,
                     config.record_ttl,
-                    None,
+                    replication_strategy,
                 )
             });
 

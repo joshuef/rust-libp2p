@@ -92,6 +92,7 @@ pub use behaviour::{
     PutRecordError, PutRecordOk, PutRecordPhase, PutRecordResult, QueryInfo, QueryMut, QueryRef,
     QueryResult, QueryStats, RoutingUpdate,
 };
+pub use jobs::RecordReplicationStrategy;
 pub use behaviour::{
     Kademlia, KademliaBucketInserts, KademliaCaching, KademliaConfig, KademliaEvent,
     KademliaStoreInserts, ProgressStep, Quorum,

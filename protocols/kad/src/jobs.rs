@@ -128,8 +128,8 @@ enum PeriodicJobState<T> {
 //////////////////////////////////////////////////////////////////////////////
 // PutRecordJob
 
-/// How should the record job
-pub(crate) enum RecordMaintenanceStrategy {
+/// How should the record job replicate records
+pub enum RecordReplicationStrategy {
     /// Always repub all records every tinerval (default)
     All,
     /// Only republish records when closest nodes to a given record have changed
@@ -139,7 +139,7 @@ pub(crate) enum RecordMaintenanceStrategy {
 /// Job for replicating / publishing records.
 pub(crate) struct PutRecordJob {
     local_id: PeerId,
-    strategy: RecordMaintenanceStrategy,
+    strategy: RecordReplicationStrategy,
     next_publish: Option<Instant>,
     publish_interval: Option<Duration>,
     record_ttl: Option<Duration>,
@@ -157,12 +157,12 @@ impl PutRecordJob {
         replicate_interval: Duration,
         publish_interval: Option<Duration>,
         record_ttl: Option<Duration>,
-        strategy: Option<RecordMaintenanceStrategy>,
+        strategy: Option<RecordReplicationStrategy>,
     ) -> Self {
         let now = Instant::now();
         let deadline = now + replicate_interval;
         let delay = Delay::new(replicate_interval);
-        let strategy = strategy.unwrap_or(RecordMaintenanceStrategy::All);
+        let strategy = strategy.unwrap_or(RecordReplicationStrategy::All);
         let next_publish = publish_interval.map(|i| now + i);
         Self {
             local_id,
@@ -217,8 +217,8 @@ impl PutRecordJob {
         T: RecordStore,
     {
         match self.strategy {
-            RecordMaintenanceStrategy::All => self.run_strategy_all(cx, store, now),
-            RecordMaintenanceStrategy::Targetted => self.run_strategy_targetted(cx, store, now),
+            RecordReplicationStrategy::All => self.run_strategy_all(cx, store, now),
+            RecordReplicationStrategy::Targetted => self.run_strategy_targetted(cx, store, now),
         }
     }
 

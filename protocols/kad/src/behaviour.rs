@@ -428,6 +428,7 @@ where
                     interval,
                     config.record_publication_interval,
                     config.record_ttl,
+                    None,
                 )
             });
 

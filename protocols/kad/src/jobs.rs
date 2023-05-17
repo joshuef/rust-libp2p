@@ -185,6 +185,12 @@ impl PutRecordJob {
         self.skipped.insert(key);
     }
 
+    /// Adds the key of a record that should be replicated in the current
+    /// or next run of the job
+    pub(crate) fn churned(&mut self, key: record_priv::Key) {
+        self.churned_records.insert(key);
+    }
+
     /// Checks whether the job is currently running.
     pub fn is_running(&self) -> bool {
         self.inner.is_running()

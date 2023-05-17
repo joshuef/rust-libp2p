@@ -70,7 +70,7 @@ use std::collections::HashSet;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::Duration;
-use std::{unimplemented, vec};
+use std::vec;
 
 /// The maximum number of queries towards which background jobs
 /// are allowed to start new queries on an invocation of
@@ -134,7 +134,7 @@ pub(crate) enum RecordMaintenanceStrategy {
     Targetted,
 }
 
-/// Periodic job for replicating / publishing records.
+/// Job for replicating / publishing records.
 pub(crate) struct PutRecordJob {
     local_id: PeerId,
     strategy: RecordMaintenanceStrategy,
@@ -142,6 +142,8 @@ pub(crate) struct PutRecordJob {
     publish_interval: Option<Duration>,
     record_ttl: Option<Duration>,
     skipped: HashSet<record_priv::Key>,
+    /// Records recently affected by churn to be replicated
+    churned_records: HashSet<record_priv::Key>,
     inner: PeriodicJob<vec::IntoIter<Record>>,
 }
 
@@ -167,6 +169,7 @@ impl PutRecordJob {
             publish_interval,
             record_ttl,
             skipped: HashSet::new(),
+            churned_records: HashSet::new(),
             inner: PeriodicJob {
                 interval: replicate_interval,
                 state: PeriodicJobState::Waiting(delay, deadline),
@@ -212,9 +215,7 @@ impl PutRecordJob {
     {
         match self.strategy {
             RecordMaintenanceStrategy::All => self.run_strategy_all(cx, store, now),
-            RecordMaintenanceStrategy::Targetted => {
-                unimplemented!("ups")
-            }
+            RecordMaintenanceStrategy::Targetted => self.run_strategy_targetted(cx, store, now),
         }
     }
 
@@ -255,6 +256,48 @@ impl PutRecordJob {
             }
 
             self.skipped.clear();
+
+            self.inner.state = PeriodicJobState::Running(records);
+        }
+
+        if let PeriodicJobState::Running(records) = &mut self.inner.state {
+            for r in records {
+                if r.is_expired(now) {
+                    store.remove(&r.key)
+                } else {
+                    return Poll::Ready(r);
+                }
+            }
+
+            // Wait for the next run.
+            let deadline = now + self.inner.interval;
+            let delay = Delay::new(self.inner.interval);
+            self.inner.state = PeriodicJobState::Waiting(delay, deadline);
+            assert!(!self.inner.check_ready(cx, now));
+        }
+
+        Poll::Pending
+    }
+
+    /// Replicate only records where close nodes have changed
+    fn run_strategy_targetted<T>(
+        &mut self,
+        cx: &mut Context<'_>,
+        store: &mut T,
+        now: Instant,
+    ) -> Poll<Record>
+    where
+        T: RecordStore,
+    {
+        if self.inner.check_ready(cx, now) {
+            let record_keys_pending_republish = self.churned_records.drain().collect::<Vec<_>>();
+
+            self.skipped.clear();
+            let records = record_keys_pending_republish
+                .iter()
+                .filter_map(|key| store.get(&key).map(|r| r.into_owned()))
+                .collect::<Vec<_>>()
+                .into_iter();
 
             self.inner.state = PeriodicJobState::Running(records);
         }

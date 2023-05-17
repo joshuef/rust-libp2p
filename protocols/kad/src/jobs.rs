@@ -70,7 +70,7 @@ use std::collections::HashSet;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::Duration;
-use std::vec;
+use std::{unimplemented, vec};
 
 /// The maximum number of queries towards which background jobs
 /// are allowed to start new queries on an invocation of
@@ -126,9 +126,18 @@ enum PeriodicJobState<T> {
 //////////////////////////////////////////////////////////////////////////////
 // PutRecordJob
 
+/// How should the record job
+pub(crate) enum RecordMaintenanceStrategy {
+    /// Always repub all records every tinerval (default)
+    All,
+    /// Only republish records when closest nodes to a given record have changed
+    Targetted,
+}
+
 /// Periodic job for replicating / publishing records.
 pub(crate) struct PutRecordJob {
     local_id: PeerId,
+    strategy: RecordMaintenanceStrategy,
     next_publish: Option<Instant>,
     publish_interval: Option<Duration>,
     record_ttl: Option<Duration>,
@@ -144,13 +153,16 @@ impl PutRecordJob {
         replicate_interval: Duration,
         publish_interval: Option<Duration>,
         record_ttl: Option<Duration>,
+        strategy: Option<RecordMaintenanceStrategy>,
     ) -> Self {
         let now = Instant::now();
         let deadline = now + replicate_interval;
         let delay = Delay::new(replicate_interval);
+        let strategy = strategy.unwrap_or(RecordMaintenanceStrategy::All);
         let next_publish = publish_interval.map(|i| now + i);
         Self {
             local_id,
+            strategy,
             next_publish,
             publish_interval,
             record_ttl,
@@ -190,6 +202,24 @@ impl PutRecordJob {
     /// the current task is registered to be notified when the job is ready
     /// to be run.
     pub(crate) fn poll<T>(
+        &mut self,
+        cx: &mut Context<'_>,
+        store: &mut T,
+        now: Instant,
+    ) -> Poll<Record>
+    where
+        T: RecordStore,
+    {
+        match self.strategy {
+            RecordMaintenanceStrategy::All => self.run_strategy_all(cx, store, now),
+            RecordMaintenanceStrategy::Targetted => {
+                unimplemented!("ups")
+            }
+        }
+    }
+
+    /// Replicate all records every interval
+    fn run_strategy_all<T>(
         &mut self,
         cx: &mut Context<'_>,
         store: &mut T,

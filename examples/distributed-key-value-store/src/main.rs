@@ -22,6 +22,7 @@
 
 use async_std::io;
 use futures::{prelude::*, select};
+use libp2p::bytes::Bytes;
 use libp2p::core::upgrade::Version;
 use libp2p::kad::record::store::MemoryStore;
 use libp2p::kad::Mode;
@@ -203,7 +204,7 @@ fn handle_input_line(kademlia: &mut Kademlia<MemoryStore>, line: String) {
             };
             let value = {
                 match args.next() {
-                    Some(value) => value.as_bytes().to_vec(),
+                    Some(value) => Bytes::from(value.as_bytes().to_vec()),
                     None => {
                         eprintln!("Expected value");
                         return;

@@ -29,7 +29,7 @@
 use crate::proto;
 use crate::record_priv::{self, Record};
 use asynchronous_codec::Framed;
-use bytes::BytesMut;
+use bytes::{Bytes, BytesMut};
 use codec::UviBytes;
 use futures::prelude::*;
 use instant::Instant;
@@ -342,7 +342,7 @@ pub enum KadResponseMsg {
         /// The key of the record.
         key: record_priv::Key,
         /// Value of the record.
-        value: Vec<u8>,
+        value: Bytes,
     },
 }
 
@@ -543,7 +543,7 @@ fn proto_to_resp_msg(message: proto::Message) -> Result<KadResponseMsg, io::Erro
 
 fn record_from_proto(record: proto::Record) -> Result<Record, io::Error> {
     let key = record_priv::Key::from(record.key);
-    let value = record.value;
+    let value = Bytes::from(record.value);
 
     let publisher = if !record.publisher.is_empty() {
         PeerId::from_bytes(&record.publisher)

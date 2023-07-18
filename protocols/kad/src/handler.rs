@@ -25,6 +25,8 @@ use crate::protocol::{
 };
 use crate::record_priv::{self, Record};
 use crate::QueryId;
+
+use bytes::Bytes;
 use either::Either;
 use futures::prelude::*;
 use futures::stream::SelectAll;
@@ -301,7 +303,7 @@ pub enum KademliaHandlerEvent {
         /// The key of the stored record.
         key: record_priv::Key,
         /// The value of the stored record.
-        value: Vec<u8>,
+        value: Bytes,
         /// The user data passed to the `PutValue`.
         query_id: QueryId,
     },
@@ -449,7 +451,7 @@ pub enum KademliaHandlerIn {
         /// Key of the value that was put.
         key: record_priv::Key,
         /// Value that was put.
-        value: Vec<u8>,
+        value: Bytes,
         /// Identifier of the request that was made by the remote.
         request_id: KademliaRequestId,
     },

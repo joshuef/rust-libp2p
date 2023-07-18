@@ -12,12 +12,13 @@
 use quick_protobuf::{MessageInfo, MessageRead, MessageWrite, BytesReader, Writer, WriterBackend, Result};
 use quick_protobuf::sizeofs::*;
 use super::super::*;
+use bytes::Bytes;
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
 pub struct Record {
     pub key: Vec<u8>,
-    pub value: Vec<u8>,
+    pub value: Bytes,
     pub timeReceived: String,
     pub publisher: Vec<u8>,
     pub ttl: u32,
@@ -29,7 +30,7 @@ impl<'a> MessageRead<'a> for Record {
         while !r.is_eof() {
             match r.next_tag(bytes) {
                 Ok(10) => msg.key = r.read_bytes(bytes)?.to_owned(),
-                Ok(18) => msg.value = r.read_bytes(bytes)?.to_owned(),
+                Ok(18) => msg.value = Bytes::from(r.read_bytes(bytes)?.to_owned()),
                 Ok(42) => msg.timeReceived = r.read_string(bytes)?.to_owned(),
                 Ok(5330) => msg.publisher = r.read_bytes(bytes)?.to_owned(),
                 Ok(6216) => msg.ttl = r.read_uint32(bytes)?,

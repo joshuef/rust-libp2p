@@ -29,6 +29,7 @@ use std::{
     time::Duration,
 };
 
+use bytes::Bytes;
 use futures::StreamExt;
 use futures_ticker::Ticker;
 use prometheus_client::registry::Registry;
@@ -604,9 +605,10 @@ where
     pub fn publish(
         &mut self,
         topic: impl Into<TopicHash>,
-        data: impl Into<Vec<u8>>,
+        data: impl Into<Bytes>,
     ) -> Result<MessageId, PublishError> {
-        let data = data.into();
+        let data = Bytes::from(data.into());
+        // Convert the input topic into TopicHash
         let topic = topic.into();
 
         // Transform the data before building a raw_message.
@@ -2747,7 +2749,7 @@ where
     pub(crate) fn build_raw_message(
         &mut self,
         topic: TopicHash,
-        data: Vec<u8>,
+        data: Bytes,
     ) -> Result<RawMessage, PublishError> {
         match &mut self.publish_config {
             PublishConfig::Signing {
@@ -2761,7 +2763,7 @@ where
                 let signature = {
                     let message = proto::Message {
                         from: Some(author.to_bytes()),
-                        data: Some(data.clone()),
+                        data: Some(data.to_vec()),
                         seqno: Some(sequence_number.to_be_bytes().to_vec()),
                         topic: topic.clone().into_string(),
                         signature: None,
@@ -3679,7 +3681,7 @@ mod local_test {
     fn test_message() -> RawMessage {
         RawMessage {
             source: Some(PeerId::random()),
-            data: vec![0; 100],
+            data: Bytes::from(vec![0; 100]),
             sequence_number: None,
             topic: TopicHash::from_raw("test_topic"),
             signature: None,

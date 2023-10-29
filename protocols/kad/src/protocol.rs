@@ -539,7 +539,7 @@ fn proto_to_resp_msg(message: proto::Message) -> Result<KadResponseMsg, io::Erro
 }
 
 fn record_from_proto(record: proto::Record) -> Result<Record, io::Error> {
-    let key = record::Key::from(record.key);
+    let key = record_priv::Key::from(record.key);
     let value = Bytes::from(record.value);
 
     let publisher = if !record.publisher.is_empty() {

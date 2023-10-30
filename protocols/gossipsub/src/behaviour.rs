@@ -607,7 +607,7 @@ where
         topic: impl Into<TopicHash>,
         data: impl Into<Bytes>,
     ) -> Result<MessageId, PublishError> {
-        let data: Bytes = data.into();
+        let data = data.into();
         // Convert the input topic into TopicHash
         let topic = topic.into();
 

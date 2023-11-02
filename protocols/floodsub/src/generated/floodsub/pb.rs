@@ -9,18 +9,19 @@
 #![cfg_attr(rustfmt, rustfmt_skip)]
 
 
+use std::borrow::Cow;
 use quick_protobuf::{MessageInfo, MessageRead, MessageWrite, BytesReader, Writer, WriterBackend, Result};
 use quick_protobuf::sizeofs::*;
 use super::super::*;
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct RPC {
-    pub subscriptions: Vec<floodsub::pb::mod_RPC::SubOpts>,
-    pub publish: Vec<floodsub::pb::Message>,
+pub struct RPC<'a> {
+    pub subscriptions: Vec<floodsub::pb::mod_RPC::SubOpts<'a>>,
+    pub publish: Vec<floodsub::pb::Message<'a>>,
 }
 
-impl<'a> MessageRead<'a> for RPC {
+impl<'a> MessageRead<'a> for RPC<'a> {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
@@ -35,7 +36,7 @@ impl<'a> MessageRead<'a> for RPC {
     }
 }
 
-impl MessageWrite for RPC {
+impl<'a> MessageWrite for RPC<'a> {
     fn get_size(&self) -> usize {
         0
         + self.subscriptions.iter().map(|s| 1 + sizeof_len((s).get_size())).sum::<usize>()
@@ -51,22 +52,23 @@ impl MessageWrite for RPC {
 
 pub mod mod_RPC {
 
+use std::borrow::Cow;
 use super::*;
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct SubOpts {
+pub struct SubOpts<'a> {
     pub subscribe: Option<bool>,
-    pub topic_id: Option<String>,
+    pub topic_id: Option<Cow<'a, str>>,
 }
 
-impl<'a> MessageRead<'a> for SubOpts {
+impl<'a> MessageRead<'a> for SubOpts<'a> {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
             match r.next_tag(bytes) {
                 Ok(8) => msg.subscribe = Some(r.read_bool(bytes)?),
-                Ok(18) => msg.topic_id = Some(r.read_string(bytes)?.to_owned()),
+                Ok(18) => msg.topic_id = Some(r.read_string(bytes).map(Cow::Borrowed)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -75,7 +77,7 @@ impl<'a> MessageRead<'a> for SubOpts {
     }
 }
 
-impl MessageWrite for SubOpts {
+impl<'a> MessageWrite for SubOpts<'a> {
     fn get_size(&self) -> usize {
         0
         + self.subscribe.as_ref().map_or(0, |m| 1 + sizeof_varint(*(m) as u64))
@@ -93,22 +95,22 @@ impl MessageWrite for SubOpts {
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct Message {
-    pub from: Option<Vec<u8>>,
-    pub data: Option<Vec<u8>>,
-    pub seqno: Option<Vec<u8>>,
-    pub topic_ids: Vec<String>,
+pub struct Message<'a> {
+    pub from: Option<Cow<'a, [u8]>>,
+    pub data: Option<Cow<'a, [u8]>>,
+    pub seqno: Option<Cow<'a, [u8]>>,
+    pub topic_ids: Vec<Cow<'a, str>>,
 }
 
-impl<'a> MessageRead<'a> for Message {
+impl<'a> MessageRead<'a> for Message<'a> {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
             match r.next_tag(bytes) {
-                Ok(10) => msg.from = Some(r.read_bytes(bytes)?.to_owned()),
-                Ok(18) => msg.data = Some(r.read_bytes(bytes)?.to_owned()),
-                Ok(26) => msg.seqno = Some(r.read_bytes(bytes)?.to_owned()),
-                Ok(34) => msg.topic_ids.push(r.read_string(bytes)?.to_owned()),
+                Ok(10) => msg.from = Some(r.read_bytes(bytes).map(Cow::Borrowed)?),
+                Ok(18) => msg.data = Some(r.read_bytes(bytes).map(Cow::Borrowed)?),
+                Ok(26) => msg.seqno = Some(r.read_bytes(bytes).map(Cow::Borrowed)?),
+                Ok(34) => msg.topic_ids.push(r.read_string(bytes).map(Cow::Borrowed)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -117,7 +119,7 @@ impl<'a> MessageRead<'a> for Message {
     }
 }
 
-impl MessageWrite for Message {
+impl<'a> MessageWrite for Message<'a> {
     fn get_size(&self) -> usize {
         0
         + self.from.as_ref().map_or(0, |m| 1 + sizeof_len((m).len()))

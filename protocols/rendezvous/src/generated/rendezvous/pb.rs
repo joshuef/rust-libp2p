@@ -15,16 +15,16 @@ use super::super::*;
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct Message {
+pub struct Message<'a> {
     pub type_pb: Option<rendezvous::pb::mod_Message::MessageType>,
-    pub register: Option<rendezvous::pb::mod_Message::Register>,
-    pub registerResponse: Option<rendezvous::pb::mod_Message::RegisterResponse>,
-    pub unregister: Option<rendezvous::pb::mod_Message::Unregister>,
-    pub discover: Option<rendezvous::pb::mod_Message::Discover>,
-    pub discoverResponse: Option<rendezvous::pb::mod_Message::DiscoverResponse>,
+    pub register: Option<rendezvous::pb::mod_Message::Register<'a>>,
+    pub registerResponse: Option<rendezvous::pb::mod_Message::RegisterResponse<'a>>,
+    pub unregister: Option<rendezvous::pb::mod_Message::Unregister<'a>>,
+    pub discover: Option<rendezvous::pb::mod_Message::Discover<'a>>,
+    pub discoverResponse: Option<rendezvous::pb::mod_Message::DiscoverResponse<'a>>,
 }
 
-impl<'a> MessageRead<'a> for Message {
+impl<'a> MessageRead<'a> for Message<'a> {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
@@ -43,7 +43,7 @@ impl<'a> MessageRead<'a> for Message {
     }
 }
 
-impl MessageWrite for Message {
+impl<'a> MessageWrite for Message<'a> {
     fn get_size(&self) -> usize {
         0
         + self.type_pb.as_ref().map_or(0, |m| 1 + sizeof_varint(*(m) as u64))
@@ -67,23 +67,24 @@ impl MessageWrite for Message {
 
 pub mod mod_Message {
 
+use std::borrow::Cow;
 use super::*;
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct Register {
-    pub ns: Option<String>,
-    pub signedPeerRecord: Option<Vec<u8>>,
+pub struct Register<'a> {
+    pub ns: Option<Cow<'a, str>>,
+    pub signedPeerRecord: Option<Cow<'a, [u8]>>,
     pub ttl: Option<u64>,
 }
 
-impl<'a> MessageRead<'a> for Register {
+impl<'a> MessageRead<'a> for Register<'a> {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
             match r.next_tag(bytes) {
-                Ok(10) => msg.ns = Some(r.read_string(bytes)?.to_owned()),
-                Ok(18) => msg.signedPeerRecord = Some(r.read_bytes(bytes)?.to_owned()),
+                Ok(10) => msg.ns = Some(r.read_string(bytes).map(Cow::Borrowed)?),
+                Ok(18) => msg.signedPeerRecord = Some(r.read_bytes(bytes).map(Cow::Borrowed)?),
                 Ok(24) => msg.ttl = Some(r.read_uint64(bytes)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
@@ -93,7 +94,7 @@ impl<'a> MessageRead<'a> for Register {
     }
 }
 
-impl MessageWrite for Register {
+impl<'a> MessageWrite for Register<'a> {
     fn get_size(&self) -> usize {
         0
         + self.ns.as_ref().map_or(0, |m| 1 + sizeof_len((m).len()))
@@ -111,19 +112,19 @@ impl MessageWrite for Register {
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct RegisterResponse {
+pub struct RegisterResponse<'a> {
     pub status: Option<rendezvous::pb::mod_Message::ResponseStatus>,
-    pub statusText: Option<String>,
+    pub statusText: Option<Cow<'a, str>>,
     pub ttl: Option<u64>,
 }
 
-impl<'a> MessageRead<'a> for RegisterResponse {
+impl<'a> MessageRead<'a> for RegisterResponse<'a> {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
             match r.next_tag(bytes) {
                 Ok(8) => msg.status = Some(r.read_enum(bytes)?),
-                Ok(18) => msg.statusText = Some(r.read_string(bytes)?.to_owned()),
+                Ok(18) => msg.statusText = Some(r.read_string(bytes).map(Cow::Borrowed)?),
                 Ok(24) => msg.ttl = Some(r.read_uint64(bytes)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
@@ -133,7 +134,7 @@ impl<'a> MessageRead<'a> for RegisterResponse {
     }
 }
 
-impl MessageWrite for RegisterResponse {
+impl<'a> MessageWrite for RegisterResponse<'a> {
     fn get_size(&self) -> usize {
         0
         + self.status.as_ref().map_or(0, |m| 1 + sizeof_varint(*(m) as u64))
@@ -151,18 +152,18 @@ impl MessageWrite for RegisterResponse {
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct Unregister {
-    pub ns: Option<String>,
-    pub id: Option<Vec<u8>>,
+pub struct Unregister<'a> {
+    pub ns: Option<Cow<'a, str>>,
+    pub id: Option<Cow<'a, [u8]>>,
 }
 
-impl<'a> MessageRead<'a> for Unregister {
+impl<'a> MessageRead<'a> for Unregister<'a> {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
             match r.next_tag(bytes) {
-                Ok(10) => msg.ns = Some(r.read_string(bytes)?.to_owned()),
-                Ok(18) => msg.id = Some(r.read_bytes(bytes)?.to_owned()),
+                Ok(10) => msg.ns = Some(r.read_string(bytes).map(Cow::Borrowed)?),
+                Ok(18) => msg.id = Some(r.read_bytes(bytes).map(Cow::Borrowed)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -171,7 +172,7 @@ impl<'a> MessageRead<'a> for Unregister {
     }
 }
 
-impl MessageWrite for Unregister {
+impl<'a> MessageWrite for Unregister<'a> {
     fn get_size(&self) -> usize {
         0
         + self.ns.as_ref().map_or(0, |m| 1 + sizeof_len((m).len()))
@@ -187,20 +188,20 @@ impl MessageWrite for Unregister {
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct Discover {
-    pub ns: Option<String>,
+pub struct Discover<'a> {
+    pub ns: Option<Cow<'a, str>>,
     pub limit: Option<u64>,
-    pub cookie: Option<Vec<u8>>,
+    pub cookie: Option<Cow<'a, [u8]>>,
 }
 
-impl<'a> MessageRead<'a> for Discover {
+impl<'a> MessageRead<'a> for Discover<'a> {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
             match r.next_tag(bytes) {
-                Ok(10) => msg.ns = Some(r.read_string(bytes)?.to_owned()),
+                Ok(10) => msg.ns = Some(r.read_string(bytes).map(Cow::Borrowed)?),
                 Ok(16) => msg.limit = Some(r.read_uint64(bytes)?),
-                Ok(26) => msg.cookie = Some(r.read_bytes(bytes)?.to_owned()),
+                Ok(26) => msg.cookie = Some(r.read_bytes(bytes).map(Cow::Borrowed)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -209,7 +210,7 @@ impl<'a> MessageRead<'a> for Discover {
     }
 }
 
-impl MessageWrite for Discover {
+impl<'a> MessageWrite for Discover<'a> {
     fn get_size(&self) -> usize {
         0
         + self.ns.as_ref().map_or(0, |m| 1 + sizeof_len((m).len()))
@@ -227,22 +228,22 @@ impl MessageWrite for Discover {
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct DiscoverResponse {
-    pub registrations: Vec<rendezvous::pb::mod_Message::Register>,
-    pub cookie: Option<Vec<u8>>,
+pub struct DiscoverResponse<'a> {
+    pub registrations: Vec<rendezvous::pb::mod_Message::Register<'a>>,
+    pub cookie: Option<Cow<'a, [u8]>>,
     pub status: Option<rendezvous::pb::mod_Message::ResponseStatus>,
-    pub statusText: Option<String>,
+    pub statusText: Option<Cow<'a, str>>,
 }
 
-impl<'a> MessageRead<'a> for DiscoverResponse {
+impl<'a> MessageRead<'a> for DiscoverResponse<'a> {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
             match r.next_tag(bytes) {
                 Ok(10) => msg.registrations.push(r.read_message::<rendezvous::pb::mod_Message::Register>(bytes)?),
-                Ok(18) => msg.cookie = Some(r.read_bytes(bytes)?.to_owned()),
+                Ok(18) => msg.cookie = Some(r.read_bytes(bytes).map(Cow::Borrowed)?),
                 Ok(24) => msg.status = Some(r.read_enum(bytes)?),
-                Ok(34) => msg.statusText = Some(r.read_string(bytes)?.to_owned()),
+                Ok(34) => msg.statusText = Some(r.read_string(bytes).map(Cow::Borrowed)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -251,7 +252,7 @@ impl<'a> MessageRead<'a> for DiscoverResponse {
     }
 }
 
-impl MessageWrite for DiscoverResponse {
+impl<'a> MessageWrite for DiscoverResponse<'a> {
     fn get_size(&self) -> usize {
         0
         + self.registrations.iter().map(|s| 1 + sizeof_len((s).get_size())).sum::<usize>()

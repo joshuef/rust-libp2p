@@ -9,19 +9,20 @@
 #![cfg_attr(rustfmt, rustfmt_skip)]
 
 
+use std::borrow::Cow;
 use quick_protobuf::{MessageInfo, MessageRead, MessageWrite, BytesReader, Writer, WriterBackend, Result};
 use quick_protobuf::sizeofs::*;
 use super::super::*;
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct RPC {
-    pub subscriptions: Vec<gossipsub::pb::mod_RPC::SubOpts>,
-    pub publish: Vec<gossipsub::pb::Message>,
-    pub control: Option<gossipsub::pb::ControlMessage>,
+pub struct RPC<'a> {
+    pub subscriptions: Vec<gossipsub::pb::mod_RPC::SubOpts<'a>>,
+    pub publish: Vec<gossipsub::pb::Message<'a>>,
+    pub control: Option<gossipsub::pb::ControlMessage<'a>>,
 }
 
-impl<'a> MessageRead<'a> for RPC {
+impl<'a> MessageRead<'a> for RPC<'a> {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
@@ -37,7 +38,7 @@ impl<'a> MessageRead<'a> for RPC {
     }
 }
 
-impl MessageWrite for RPC {
+impl<'a> MessageWrite for RPC<'a> {
     fn get_size(&self) -> usize {
         0
         + self.subscriptions.iter().map(|s| 1 + sizeof_len((s).get_size())).sum::<usize>()
@@ -55,22 +56,23 @@ impl MessageWrite for RPC {
 
 pub mod mod_RPC {
 
+use std::borrow::Cow;
 use super::*;
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct SubOpts {
+pub struct SubOpts<'a> {
     pub subscribe: Option<bool>,
-    pub topic_id: Option<String>,
+    pub topic_id: Option<Cow<'a, str>>,
 }
 
-impl<'a> MessageRead<'a> for SubOpts {
+impl<'a> MessageRead<'a> for SubOpts<'a> {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
             match r.next_tag(bytes) {
                 Ok(8) => msg.subscribe = Some(r.read_bool(bytes)?),
-                Ok(18) => msg.topic_id = Some(r.read_string(bytes)?.to_owned()),
+                Ok(18) => msg.topic_id = Some(r.read_string(bytes).map(Cow::Borrowed)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -79,7 +81,7 @@ impl<'a> MessageRead<'a> for SubOpts {
     }
 }
 
-impl MessageWrite for SubOpts {
+impl<'a> MessageWrite for SubOpts<'a> {
     fn get_size(&self) -> usize {
         0
         + self.subscribe.as_ref().map_or(0, |m| 1 + sizeof_varint(*(m) as u64))
@@ -97,26 +99,26 @@ impl MessageWrite for SubOpts {
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct Message {
-    pub from: Option<Vec<u8>>,
-    pub data: Option<Vec<u8>>,
-    pub seqno: Option<Vec<u8>>,
-    pub topic: String,
-    pub signature: Option<Vec<u8>>,
-    pub key: Option<Vec<u8>>,
+pub struct Message<'a> {
+    pub from: Option<Cow<'a, [u8]>>,
+    pub data: Option<Cow<'a, [u8]>>,
+    pub seqno: Option<Cow<'a, [u8]>>,
+    pub topic: Cow<'a, str>,
+    pub signature: Option<Cow<'a, [u8]>>,
+    pub key: Option<Cow<'a, [u8]>>,
 }
 
-impl<'a> MessageRead<'a> for Message {
+impl<'a> MessageRead<'a> for Message<'a> {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
             match r.next_tag(bytes) {
-                Ok(10) => msg.from = Some(r.read_bytes(bytes)?.to_owned()),
-                Ok(18) => msg.data = Some(r.read_bytes(bytes)?.to_owned()),
-                Ok(26) => msg.seqno = Some(r.read_bytes(bytes)?.to_owned()),
-                Ok(34) => msg.topic = r.read_string(bytes)?.to_owned(),
-                Ok(42) => msg.signature = Some(r.read_bytes(bytes)?.to_owned()),
-                Ok(50) => msg.key = Some(r.read_bytes(bytes)?.to_owned()),
+                Ok(10) => msg.from = Some(r.read_bytes(bytes).map(Cow::Borrowed)?),
+                Ok(18) => msg.data = Some(r.read_bytes(bytes).map(Cow::Borrowed)?),
+                Ok(26) => msg.seqno = Some(r.read_bytes(bytes).map(Cow::Borrowed)?),
+                Ok(34) => msg.topic = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(42) => msg.signature = Some(r.read_bytes(bytes).map(Cow::Borrowed)?),
+                Ok(50) => msg.key = Some(r.read_bytes(bytes).map(Cow::Borrowed)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -125,7 +127,7 @@ impl<'a> MessageRead<'a> for Message {
     }
 }
 
-impl MessageWrite for Message {
+impl<'a> MessageWrite for Message<'a> {
     fn get_size(&self) -> usize {
         0
         + self.from.as_ref().map_or(0, |m| 1 + sizeof_len((m).len()))
@@ -149,14 +151,14 @@ impl MessageWrite for Message {
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct ControlMessage {
-    pub ihave: Vec<gossipsub::pb::ControlIHave>,
-    pub iwant: Vec<gossipsub::pb::ControlIWant>,
-    pub graft: Vec<gossipsub::pb::ControlGraft>,
-    pub prune: Vec<gossipsub::pb::ControlPrune>,
+pub struct ControlMessage<'a> {
+    pub ihave: Vec<gossipsub::pb::ControlIHave<'a>>,
+    pub iwant: Vec<gossipsub::pb::ControlIWant<'a>>,
+    pub graft: Vec<gossipsub::pb::ControlGraft<'a>>,
+    pub prune: Vec<gossipsub::pb::ControlPrune<'a>>,
 }
 
-impl<'a> MessageRead<'a> for ControlMessage {
+impl<'a> MessageRead<'a> for ControlMessage<'a> {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
@@ -173,7 +175,7 @@ impl<'a> MessageRead<'a> for ControlMessage {
     }
 }
 
-impl MessageWrite for ControlMessage {
+impl<'a> MessageWrite for ControlMessage<'a> {
     fn get_size(&self) -> usize {
         0
         + self.ihave.iter().map(|s| 1 + sizeof_len((s).get_size())).sum::<usize>()
@@ -193,18 +195,18 @@ impl MessageWrite for ControlMessage {
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct ControlIHave {
-    pub topic_id: Option<String>,
-    pub message_ids: Vec<Vec<u8>>,
+pub struct ControlIHave<'a> {
+    pub topic_id: Option<Cow<'a, str>>,
+    pub message_ids: Vec<Cow<'a, [u8]>>,
 }
 
-impl<'a> MessageRead<'a> for ControlIHave {
+impl<'a> MessageRead<'a> for ControlIHave<'a> {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
             match r.next_tag(bytes) {
-                Ok(10) => msg.topic_id = Some(r.read_string(bytes)?.to_owned()),
-                Ok(18) => msg.message_ids.push(r.read_bytes(bytes)?.to_owned()),
+                Ok(10) => msg.topic_id = Some(r.read_string(bytes).map(Cow::Borrowed)?),
+                Ok(18) => msg.message_ids.push(r.read_bytes(bytes).map(Cow::Borrowed)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -213,7 +215,7 @@ impl<'a> MessageRead<'a> for ControlIHave {
     }
 }
 
-impl MessageWrite for ControlIHave {
+impl<'a> MessageWrite for ControlIHave<'a> {
     fn get_size(&self) -> usize {
         0
         + self.topic_id.as_ref().map_or(0, |m| 1 + sizeof_len((m).len()))
@@ -229,16 +231,16 @@ impl MessageWrite for ControlIHave {
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct ControlIWant {
-    pub message_ids: Vec<Vec<u8>>,
+pub struct ControlIWant<'a> {
+    pub message_ids: Vec<Cow<'a, [u8]>>,
 }
 
-impl<'a> MessageRead<'a> for ControlIWant {
+impl<'a> MessageRead<'a> for ControlIWant<'a> {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
             match r.next_tag(bytes) {
-                Ok(10) => msg.message_ids.push(r.read_bytes(bytes)?.to_owned()),
+                Ok(10) => msg.message_ids.push(r.read_bytes(bytes).map(Cow::Borrowed)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -247,7 +249,7 @@ impl<'a> MessageRead<'a> for ControlIWant {
     }
 }
 
-impl MessageWrite for ControlIWant {
+impl<'a> MessageWrite for ControlIWant<'a> {
     fn get_size(&self) -> usize {
         0
         + self.message_ids.iter().map(|s| 1 + sizeof_len((s).len())).sum::<usize>()
@@ -261,16 +263,16 @@ impl MessageWrite for ControlIWant {
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct ControlGraft {
-    pub topic_id: Option<String>,
+pub struct ControlGraft<'a> {
+    pub topic_id: Option<Cow<'a, str>>,
 }
 
-impl<'a> MessageRead<'a> for ControlGraft {
+impl<'a> MessageRead<'a> for ControlGraft<'a> {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
             match r.next_tag(bytes) {
-                Ok(10) => msg.topic_id = Some(r.read_string(bytes)?.to_owned()),
+                Ok(10) => msg.topic_id = Some(r.read_string(bytes).map(Cow::Borrowed)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -279,7 +281,7 @@ impl<'a> MessageRead<'a> for ControlGraft {
     }
 }
 
-impl MessageWrite for ControlGraft {
+impl<'a> MessageWrite for ControlGraft<'a> {
     fn get_size(&self) -> usize {
         0
         + self.topic_id.as_ref().map_or(0, |m| 1 + sizeof_len((m).len()))
@@ -293,18 +295,18 @@ impl MessageWrite for ControlGraft {
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct ControlPrune {
-    pub topic_id: Option<String>,
-    pub peers: Vec<gossipsub::pb::PeerInfo>,
+pub struct ControlPrune<'a> {
+    pub topic_id: Option<Cow<'a, str>>,
+    pub peers: Vec<gossipsub::pb::PeerInfo<'a>>,
     pub backoff: Option<u64>,
 }
 
-impl<'a> MessageRead<'a> for ControlPrune {
+impl<'a> MessageRead<'a> for ControlPrune<'a> {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
             match r.next_tag(bytes) {
-                Ok(10) => msg.topic_id = Some(r.read_string(bytes)?.to_owned()),
+                Ok(10) => msg.topic_id = Some(r.read_string(bytes).map(Cow::Borrowed)?),
                 Ok(18) => msg.peers.push(r.read_message::<gossipsub::pb::PeerInfo>(bytes)?),
                 Ok(24) => msg.backoff = Some(r.read_uint64(bytes)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
@@ -315,7 +317,7 @@ impl<'a> MessageRead<'a> for ControlPrune {
     }
 }
 
-impl MessageWrite for ControlPrune {
+impl<'a> MessageWrite for ControlPrune<'a> {
     fn get_size(&self) -> usize {
         0
         + self.topic_id.as_ref().map_or(0, |m| 1 + sizeof_len((m).len()))
@@ -333,18 +335,18 @@ impl MessageWrite for ControlPrune {
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct PeerInfo {
-    pub peer_id: Option<Vec<u8>>,
-    pub signed_peer_record: Option<Vec<u8>>,
+pub struct PeerInfo<'a> {
+    pub peer_id: Option<Cow<'a, [u8]>>,
+    pub signed_peer_record: Option<Cow<'a, [u8]>>,
 }
 
-impl<'a> MessageRead<'a> for PeerInfo {
+impl<'a> MessageRead<'a> for PeerInfo<'a> {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
             match r.next_tag(bytes) {
-                Ok(10) => msg.peer_id = Some(r.read_bytes(bytes)?.to_owned()),
-                Ok(18) => msg.signed_peer_record = Some(r.read_bytes(bytes)?.to_owned()),
+                Ok(10) => msg.peer_id = Some(r.read_bytes(bytes).map(Cow::Borrowed)?),
+                Ok(18) => msg.signed_peer_record = Some(r.read_bytes(bytes).map(Cow::Borrowed)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -353,7 +355,7 @@ impl<'a> MessageRead<'a> for PeerInfo {
     }
 }
 
-impl MessageWrite for PeerInfo {
+impl<'a> MessageWrite for PeerInfo<'a> {
     fn get_size(&self) -> usize {
         0
         + self.peer_id.as_ref().map_or(0, |m| 1 + sizeof_len((m).len()))
@@ -369,18 +371,18 @@ impl MessageWrite for PeerInfo {
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct TopicDescriptor {
-    pub name: Option<String>,
-    pub auth: Option<gossipsub::pb::mod_TopicDescriptor::AuthOpts>,
-    pub enc: Option<gossipsub::pb::mod_TopicDescriptor::EncOpts>,
+pub struct TopicDescriptor<'a> {
+    pub name: Option<Cow<'a, str>>,
+    pub auth: Option<gossipsub::pb::mod_TopicDescriptor::AuthOpts<'a>>,
+    pub enc: Option<gossipsub::pb::mod_TopicDescriptor::EncOpts<'a>>,
 }
 
-impl<'a> MessageRead<'a> for TopicDescriptor {
+impl<'a> MessageRead<'a> for TopicDescriptor<'a> {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
             match r.next_tag(bytes) {
-                Ok(10) => msg.name = Some(r.read_string(bytes)?.to_owned()),
+                Ok(10) => msg.name = Some(r.read_string(bytes).map(Cow::Borrowed)?),
                 Ok(18) => msg.auth = Some(r.read_message::<gossipsub::pb::mod_TopicDescriptor::AuthOpts>(bytes)?),
                 Ok(26) => msg.enc = Some(r.read_message::<gossipsub::pb::mod_TopicDescriptor::EncOpts>(bytes)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
@@ -391,7 +393,7 @@ impl<'a> MessageRead<'a> for TopicDescriptor {
     }
 }
 
-impl MessageWrite for TopicDescriptor {
+impl<'a> MessageWrite for TopicDescriptor<'a> {
     fn get_size(&self) -> usize {
         0
         + self.name.as_ref().map_or(0, |m| 1 + sizeof_len((m).len()))
@@ -409,22 +411,23 @@ impl MessageWrite for TopicDescriptor {
 
 pub mod mod_TopicDescriptor {
 
+use std::borrow::Cow;
 use super::*;
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct AuthOpts {
+pub struct AuthOpts<'a> {
     pub mode: Option<gossipsub::pb::mod_TopicDescriptor::mod_AuthOpts::AuthMode>,
-    pub keys: Vec<Vec<u8>>,
+    pub keys: Vec<Cow<'a, [u8]>>,
 }
 
-impl<'a> MessageRead<'a> for AuthOpts {
+impl<'a> MessageRead<'a> for AuthOpts<'a> {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
             match r.next_tag(bytes) {
                 Ok(8) => msg.mode = Some(r.read_enum(bytes)?),
-                Ok(18) => msg.keys.push(r.read_bytes(bytes)?.to_owned()),
+                Ok(18) => msg.keys.push(r.read_bytes(bytes).map(Cow::Borrowed)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -433,7 +436,7 @@ impl<'a> MessageRead<'a> for AuthOpts {
     }
 }
 
-impl MessageWrite for AuthOpts {
+impl<'a> MessageWrite for AuthOpts<'a> {
     fn get_size(&self) -> usize {
         0
         + self.mode.as_ref().map_or(0, |m| 1 + sizeof_varint(*(m) as u64))
@@ -489,18 +492,18 @@ impl<'a> From<&'a str> for AuthMode {
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct EncOpts {
+pub struct EncOpts<'a> {
     pub mode: Option<gossipsub::pb::mod_TopicDescriptor::mod_EncOpts::EncMode>,
-    pub key_hashes: Vec<Vec<u8>>,
+    pub key_hashes: Vec<Cow<'a, [u8]>>,
 }
 
-impl<'a> MessageRead<'a> for EncOpts {
+impl<'a> MessageRead<'a> for EncOpts<'a> {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
             match r.next_tag(bytes) {
                 Ok(8) => msg.mode = Some(r.read_enum(bytes)?),
-                Ok(18) => msg.key_hashes.push(r.read_bytes(bytes)?.to_owned()),
+                Ok(18) => msg.key_hashes.push(r.read_bytes(bytes).map(Cow::Borrowed)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -509,7 +512,7 @@ impl<'a> MessageRead<'a> for EncOpts {
     }
 }
 
-impl MessageWrite for EncOpts {
+impl<'a> MessageWrite for EncOpts<'a> {
     fn get_size(&self) -> usize {
         0
         + self.mode.as_ref().map_or(0, |m| 1 + sizeof_varint(*(m) as u64))

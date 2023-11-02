@@ -9,24 +9,25 @@
 #![cfg_attr(rustfmt, rustfmt_skip)]
 
 
+use std::borrow::Cow;
 use quick_protobuf::{MessageInfo, MessageRead, MessageWrite, BytesReader, Writer, WriterBackend, Result};
 use quick_protobuf::sizeofs::*;
 use super::super::*;
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct Message {
+pub struct Message<'a> {
     pub flag: Option<webrtc::pb::mod_Message::Flag>,
-    pub message: Option<Vec<u8>>,
+    pub message: Option<Cow<'a, [u8]>>,
 }
 
-impl<'a> MessageRead<'a> for Message {
+impl<'a> MessageRead<'a> for Message<'a> {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
             match r.next_tag(bytes) {
                 Ok(8) => msg.flag = Some(r.read_enum(bytes)?),
-                Ok(18) => msg.message = Some(r.read_bytes(bytes)?.to_owned()),
+                Ok(18) => msg.message = Some(r.read_bytes(bytes).map(Cow::Borrowed)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -35,7 +36,7 @@ impl<'a> MessageRead<'a> for Message {
     }
 }
 
-impl MessageWrite for Message {
+impl<'a> MessageWrite for Message<'a> {
     fn get_size(&self) -> usize {
         0
         + self.flag.as_ref().map_or(0, |m| 1 + sizeof_varint(*(m) as u64))

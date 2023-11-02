@@ -9,24 +9,25 @@
 #![cfg_attr(rustfmt, rustfmt_skip)]
 
 
+use std::borrow::Cow;
 use quick_protobuf::{MessageInfo, MessageRead, MessageWrite, BytesReader, Writer, WriterBackend, Result};
 use quick_protobuf::sizeofs::*;
 use super::*;
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct Exchange {
-    pub id: Option<Vec<u8>>,
-    pub pubkey: Option<Vec<u8>>,
+pub struct Exchange<'a> {
+    pub id: Option<Cow<'a, [u8]>>,
+    pub pubkey: Option<Cow<'a, [u8]>>,
 }
 
-impl<'a> MessageRead<'a> for Exchange {
+impl<'a> MessageRead<'a> for Exchange<'a> {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
             match r.next_tag(bytes) {
-                Ok(10) => msg.id = Some(r.read_bytes(bytes)?.to_owned()),
-                Ok(18) => msg.pubkey = Some(r.read_bytes(bytes)?.to_owned()),
+                Ok(10) => msg.id = Some(r.read_bytes(bytes).map(Cow::Borrowed)?),
+                Ok(18) => msg.pubkey = Some(r.read_bytes(bytes).map(Cow::Borrowed)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -35,7 +36,7 @@ impl<'a> MessageRead<'a> for Exchange {
     }
 }
 
-impl MessageWrite for Exchange {
+impl<'a> MessageWrite for Exchange<'a> {
     fn get_size(&self) -> usize {
         0
         + self.id.as_ref().map_or(0, |m| 1 + sizeof_len((m).len()))

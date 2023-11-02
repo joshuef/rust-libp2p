@@ -9,29 +9,30 @@
 #![cfg_attr(rustfmt, rustfmt_skip)]
 
 
+use std::borrow::Cow;
 use quick_protobuf::{MessageInfo, MessageRead, MessageWrite, BytesReader, Writer, WriterBackend, Result};
 use quick_protobuf::sizeofs::*;
 use super::super::*;
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct Record {
-    pub key: Vec<u8>,
-    pub value: Vec<u8>,
-    pub timeReceived: String,
-    pub publisher: Vec<u8>,
+pub struct Record<'a> {
+    pub key: Cow<'a, [u8]>,
+    pub value: Cow<'a, [u8]>,
+    pub timeReceived: Cow<'a, str>,
+    pub publisher: Cow<'a, [u8]>,
     pub ttl: u32,
 }
 
-impl<'a> MessageRead<'a> for Record {
+impl<'a> MessageRead<'a> for Record<'a> {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
             match r.next_tag(bytes) {
-                Ok(10) => msg.key = r.read_bytes(bytes)?.to_owned(),
-                Ok(18) => msg.value = r.read_bytes(bytes)?.to_owned(),
-                Ok(42) => msg.timeReceived = r.read_string(bytes)?.to_owned(),
-                Ok(5330) => msg.publisher = r.read_bytes(bytes)?.to_owned(),
+                Ok(10) => msg.key = r.read_bytes(bytes).map(Cow::Borrowed)?,
+                Ok(18) => msg.value = r.read_bytes(bytes).map(Cow::Borrowed)?,
+                Ok(42) => msg.timeReceived = r.read_string(bytes).map(Cow::Borrowed)?,
+                Ok(5330) => msg.publisher = r.read_bytes(bytes).map(Cow::Borrowed)?,
                 Ok(6216) => msg.ttl = r.read_uint32(bytes)?,
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
@@ -41,21 +42,21 @@ impl<'a> MessageRead<'a> for Record {
     }
 }
 
-impl MessageWrite for Record {
+impl<'a> MessageWrite for Record<'a> {
     fn get_size(&self) -> usize {
         0
-        + if self.key.is_empty() { 0 } else { 1 + sizeof_len((&self.key).len()) }
-        + if self.value.is_empty() { 0 } else { 1 + sizeof_len((&self.value).len()) }
-        + if self.timeReceived == String::default() { 0 } else { 1 + sizeof_len((&self.timeReceived).len()) }
-        + if self.publisher.is_empty() { 0 } else { 2 + sizeof_len((&self.publisher).len()) }
+        + if self.key == Cow::Borrowed(b"") { 0 } else { 1 + sizeof_len((&self.key).len()) }
+        + if self.value == Cow::Borrowed(b"") { 0 } else { 1 + sizeof_len((&self.value).len()) }
+        + if self.timeReceived == "" { 0 } else { 1 + sizeof_len((&self.timeReceived).len()) }
+        + if self.publisher == Cow::Borrowed(b"") { 0 } else { 2 + sizeof_len((&self.publisher).len()) }
         + if self.ttl == 0u32 { 0 } else { 2 + sizeof_varint(*(&self.ttl) as u64) }
     }
 
     fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
-        if !self.key.is_empty() { w.write_with_tag(10, |w| w.write_bytes(&**&self.key))?; }
-        if !self.value.is_empty() { w.write_with_tag(18, |w| w.write_bytes(&**&self.value))?; }
-        if self.timeReceived != String::default() { w.write_with_tag(42, |w| w.write_string(&**&self.timeReceived))?; }
-        if !self.publisher.is_empty() { w.write_with_tag(5330, |w| w.write_bytes(&**&self.publisher))?; }
+        if self.key != Cow::Borrowed(b"") { w.write_with_tag(10, |w| w.write_bytes(&**&self.key))?; }
+        if self.value != Cow::Borrowed(b"") { w.write_with_tag(18, |w| w.write_bytes(&**&self.value))?; }
+        if self.timeReceived != "" { w.write_with_tag(42, |w| w.write_string(&**&self.timeReceived))?; }
+        if self.publisher != Cow::Borrowed(b"") { w.write_with_tag(5330, |w| w.write_bytes(&**&self.publisher))?; }
         if self.ttl != 0u32 { w.write_with_tag(6216, |w| w.write_uint32(*&self.ttl))?; }
         Ok(())
     }
@@ -63,23 +64,23 @@ impl MessageWrite for Record {
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct Message {
+pub struct Message<'a> {
     pub type_pb: dht::pb::mod_Message::MessageType,
     pub clusterLevelRaw: i32,
-    pub key: Vec<u8>,
-    pub record: Option<dht::pb::Record>,
-    pub closerPeers: Vec<dht::pb::mod_Message::Peer>,
-    pub providerPeers: Vec<dht::pb::mod_Message::Peer>,
+    pub key: Cow<'a, [u8]>,
+    pub record: Option<dht::pb::Record<'a>>,
+    pub closerPeers: Vec<dht::pb::mod_Message::Peer<'a>>,
+    pub providerPeers: Vec<dht::pb::mod_Message::Peer<'a>>,
 }
 
-impl<'a> MessageRead<'a> for Message {
+impl<'a> MessageRead<'a> for Message<'a> {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
             match r.next_tag(bytes) {
                 Ok(8) => msg.type_pb = r.read_enum(bytes)?,
                 Ok(80) => msg.clusterLevelRaw = r.read_int32(bytes)?,
-                Ok(18) => msg.key = r.read_bytes(bytes)?.to_owned(),
+                Ok(18) => msg.key = r.read_bytes(bytes).map(Cow::Borrowed)?,
                 Ok(26) => msg.record = Some(r.read_message::<dht::pb::Record>(bytes)?),
                 Ok(66) => msg.closerPeers.push(r.read_message::<dht::pb::mod_Message::Peer>(bytes)?),
                 Ok(74) => msg.providerPeers.push(r.read_message::<dht::pb::mod_Message::Peer>(bytes)?),
@@ -91,12 +92,12 @@ impl<'a> MessageRead<'a> for Message {
     }
 }
 
-impl MessageWrite for Message {
+impl<'a> MessageWrite for Message<'a> {
     fn get_size(&self) -> usize {
         0
         + if self.type_pb == dht::pb::mod_Message::MessageType::PUT_VALUE { 0 } else { 1 + sizeof_varint(*(&self.type_pb) as u64) }
         + if self.clusterLevelRaw == 0i32 { 0 } else { 1 + sizeof_varint(*(&self.clusterLevelRaw) as u64) }
-        + if self.key.is_empty() { 0 } else { 1 + sizeof_len((&self.key).len()) }
+        + if self.key == Cow::Borrowed(b"") { 0 } else { 1 + sizeof_len((&self.key).len()) }
         + self.record.as_ref().map_or(0, |m| 1 + sizeof_len((m).get_size()))
         + self.closerPeers.iter().map(|s| 1 + sizeof_len((s).get_size())).sum::<usize>()
         + self.providerPeers.iter().map(|s| 1 + sizeof_len((s).get_size())).sum::<usize>()
@@ -105,7 +106,7 @@ impl MessageWrite for Message {
     fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
         if self.type_pb != dht::pb::mod_Message::MessageType::PUT_VALUE { w.write_with_tag(8, |w| w.write_enum(*&self.type_pb as i32))?; }
         if self.clusterLevelRaw != 0i32 { w.write_with_tag(80, |w| w.write_int32(*&self.clusterLevelRaw))?; }
-        if !self.key.is_empty() { w.write_with_tag(18, |w| w.write_bytes(&**&self.key))?; }
+        if self.key != Cow::Borrowed(b"") { w.write_with_tag(18, |w| w.write_bytes(&**&self.key))?; }
         if let Some(ref s) = self.record { w.write_with_tag(26, |w| w.write_message(s))?; }
         for s in &self.closerPeers { w.write_with_tag(66, |w| w.write_message(s))?; }
         for s in &self.providerPeers { w.write_with_tag(74, |w| w.write_message(s))?; }
@@ -115,23 +116,24 @@ impl MessageWrite for Message {
 
 pub mod mod_Message {
 
+use std::borrow::Cow;
 use super::*;
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct Peer {
-    pub id: Vec<u8>,
-    pub addrs: Vec<Vec<u8>>,
+pub struct Peer<'a> {
+    pub id: Cow<'a, [u8]>,
+    pub addrs: Vec<Cow<'a, [u8]>>,
     pub connection: dht::pb::mod_Message::ConnectionType,
 }
 
-impl<'a> MessageRead<'a> for Peer {
+impl<'a> MessageRead<'a> for Peer<'a> {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
             match r.next_tag(bytes) {
-                Ok(10) => msg.id = r.read_bytes(bytes)?.to_owned(),
-                Ok(18) => msg.addrs.push(r.read_bytes(bytes)?.to_owned()),
+                Ok(10) => msg.id = r.read_bytes(bytes).map(Cow::Borrowed)?,
+                Ok(18) => msg.addrs.push(r.read_bytes(bytes).map(Cow::Borrowed)?),
                 Ok(24) => msg.connection = r.read_enum(bytes)?,
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
@@ -141,16 +143,16 @@ impl<'a> MessageRead<'a> for Peer {
     }
 }
 
-impl MessageWrite for Peer {
+impl<'a> MessageWrite for Peer<'a> {
     fn get_size(&self) -> usize {
         0
-        + if self.id.is_empty() { 0 } else { 1 + sizeof_len((&self.id).len()) }
+        + if self.id == Cow::Borrowed(b"") { 0 } else { 1 + sizeof_len((&self.id).len()) }
         + self.addrs.iter().map(|s| 1 + sizeof_len((s).len())).sum::<usize>()
         + if self.connection == dht::pb::mod_Message::ConnectionType::NOT_CONNECTED { 0 } else { 1 + sizeof_varint(*(&self.connection) as u64) }
     }
 
     fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
-        if !self.id.is_empty() { w.write_with_tag(10, |w| w.write_bytes(&**&self.id))?; }
+        if self.id != Cow::Borrowed(b"") { w.write_with_tag(10, |w| w.write_bytes(&**&self.id))?; }
         for s in &self.addrs { w.write_with_tag(18, |w| w.write_bytes(&**s))?; }
         if self.connection != dht::pb::mod_Message::ConnectionType::NOT_CONNECTED { w.write_with_tag(24, |w| w.write_enum(*&self.connection as i32))?; }
         Ok(())

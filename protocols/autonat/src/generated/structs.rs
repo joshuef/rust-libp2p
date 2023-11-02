@@ -15,13 +15,13 @@ use super::*;
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct Message {
+pub struct Message<'a> {
     pub type_pb: Option<structs::mod_Message::MessageType>,
-    pub dial: Option<structs::mod_Message::Dial>,
-    pub dialResponse: Option<structs::mod_Message::DialResponse>,
+    pub dial: Option<structs::mod_Message::Dial<'a>>,
+    pub dialResponse: Option<structs::mod_Message::DialResponse<'a>>,
 }
 
-impl<'a> MessageRead<'a> for Message {
+impl<'a> MessageRead<'a> for Message<'a> {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
@@ -37,7 +37,7 @@ impl<'a> MessageRead<'a> for Message {
     }
 }
 
-impl MessageWrite for Message {
+impl<'a> MessageWrite for Message<'a> {
     fn get_size(&self) -> usize {
         0
         + self.type_pb.as_ref().map_or(0, |m| 1 + sizeof_varint(*(m) as u64))
@@ -55,22 +55,23 @@ impl MessageWrite for Message {
 
 pub mod mod_Message {
 
+use std::borrow::Cow;
 use super::*;
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct PeerInfo {
-    pub id: Option<Vec<u8>>,
-    pub addrs: Vec<Vec<u8>>,
+pub struct PeerInfo<'a> {
+    pub id: Option<Cow<'a, [u8]>>,
+    pub addrs: Vec<Cow<'a, [u8]>>,
 }
 
-impl<'a> MessageRead<'a> for PeerInfo {
+impl<'a> MessageRead<'a> for PeerInfo<'a> {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
             match r.next_tag(bytes) {
-                Ok(10) => msg.id = Some(r.read_bytes(bytes)?.to_owned()),
-                Ok(18) => msg.addrs.push(r.read_bytes(bytes)?.to_owned()),
+                Ok(10) => msg.id = Some(r.read_bytes(bytes).map(Cow::Borrowed)?),
+                Ok(18) => msg.addrs.push(r.read_bytes(bytes).map(Cow::Borrowed)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -79,7 +80,7 @@ impl<'a> MessageRead<'a> for PeerInfo {
     }
 }
 
-impl MessageWrite for PeerInfo {
+impl<'a> MessageWrite for PeerInfo<'a> {
     fn get_size(&self) -> usize {
         0
         + self.id.as_ref().map_or(0, |m| 1 + sizeof_len((m).len()))
@@ -95,11 +96,11 @@ impl MessageWrite for PeerInfo {
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct Dial {
-    pub peer: Option<structs::mod_Message::PeerInfo>,
+pub struct Dial<'a> {
+    pub peer: Option<structs::mod_Message::PeerInfo<'a>>,
 }
 
-impl<'a> MessageRead<'a> for Dial {
+impl<'a> MessageRead<'a> for Dial<'a> {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
@@ -113,7 +114,7 @@ impl<'a> MessageRead<'a> for Dial {
     }
 }
 
-impl MessageWrite for Dial {
+impl<'a> MessageWrite for Dial<'a> {
     fn get_size(&self) -> usize {
         0
         + self.peer.as_ref().map_or(0, |m| 1 + sizeof_len((m).get_size()))
@@ -127,20 +128,20 @@ impl MessageWrite for Dial {
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct DialResponse {
+pub struct DialResponse<'a> {
     pub status: Option<structs::mod_Message::ResponseStatus>,
-    pub statusText: Option<String>,
-    pub addr: Option<Vec<u8>>,
+    pub statusText: Option<Cow<'a, str>>,
+    pub addr: Option<Cow<'a, [u8]>>,
 }
 
-impl<'a> MessageRead<'a> for DialResponse {
+impl<'a> MessageRead<'a> for DialResponse<'a> {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
             match r.next_tag(bytes) {
                 Ok(8) => msg.status = Some(r.read_enum(bytes)?),
-                Ok(18) => msg.statusText = Some(r.read_string(bytes)?.to_owned()),
-                Ok(26) => msg.addr = Some(r.read_bytes(bytes)?.to_owned()),
+                Ok(18) => msg.statusText = Some(r.read_string(bytes).map(Cow::Borrowed)?),
+                Ok(26) => msg.addr = Some(r.read_bytes(bytes).map(Cow::Borrowed)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -149,7 +150,7 @@ impl<'a> MessageRead<'a> for DialResponse {
     }
 }
 
-impl MessageWrite for DialResponse {
+impl<'a> MessageWrite for DialResponse<'a> {
     fn get_size(&self) -> usize {
         0
         + self.status.as_ref().map_or(0, |m| 1 + sizeof_varint(*(m) as u64))

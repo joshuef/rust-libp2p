@@ -9,6 +9,7 @@
 #![cfg_attr(rustfmt, rustfmt_skip)]
 
 
+use std::borrow::Cow;
 use quick_protobuf::{MessageInfo, MessageRead, MessageWrite, BytesReader, Writer, WriterBackend, Result};
 use quick_protobuf::sizeofs::*;
 use super::super::*;
@@ -65,15 +66,15 @@ impl<'a> From<&'a str> for Status {
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct HopMessage {
+pub struct HopMessage<'a> {
     pub type_pb: message_v2::pb::mod_HopMessage::Type,
-    pub peer: Option<message_v2::pb::Peer>,
-    pub reservation: Option<message_v2::pb::Reservation>,
+    pub peer: Option<message_v2::pb::Peer<'a>>,
+    pub reservation: Option<message_v2::pb::Reservation<'a>>,
     pub limit: Option<message_v2::pb::Limit>,
     pub status: Option<message_v2::pb::Status>,
 }
 
-impl<'a> MessageRead<'a> for HopMessage {
+impl<'a> MessageRead<'a> for HopMessage<'a> {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
@@ -91,7 +92,7 @@ impl<'a> MessageRead<'a> for HopMessage {
     }
 }
 
-impl MessageWrite for HopMessage {
+impl<'a> MessageWrite for HopMessage<'a> {
     fn get_size(&self) -> usize {
         0
         + 1 + sizeof_varint(*(&self.type_pb) as u64)
@@ -153,14 +154,14 @@ impl<'a> From<&'a str> for Type {
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct StopMessage {
+pub struct StopMessage<'a> {
     pub type_pb: message_v2::pb::mod_StopMessage::Type,
-    pub peer: Option<message_v2::pb::Peer>,
+    pub peer: Option<message_v2::pb::Peer<'a>>,
     pub limit: Option<message_v2::pb::Limit>,
     pub status: Option<message_v2::pb::Status>,
 }
 
-impl<'a> MessageRead<'a> for StopMessage {
+impl<'a> MessageRead<'a> for StopMessage<'a> {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
@@ -177,7 +178,7 @@ impl<'a> MessageRead<'a> for StopMessage {
     }
 }
 
-impl MessageWrite for StopMessage {
+impl<'a> MessageWrite for StopMessage<'a> {
     fn get_size(&self) -> usize {
         0
         + 1 + sizeof_varint(*(&self.type_pb) as u64)
@@ -234,18 +235,18 @@ impl<'a> From<&'a str> for Type {
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct Peer {
-    pub id: Vec<u8>,
-    pub addrs: Vec<Vec<u8>>,
+pub struct Peer<'a> {
+    pub id: Cow<'a, [u8]>,
+    pub addrs: Vec<Cow<'a, [u8]>>,
 }
 
-impl<'a> MessageRead<'a> for Peer {
+impl<'a> MessageRead<'a> for Peer<'a> {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
             match r.next_tag(bytes) {
-                Ok(10) => msg.id = r.read_bytes(bytes)?.to_owned(),
-                Ok(18) => msg.addrs.push(r.read_bytes(bytes)?.to_owned()),
+                Ok(10) => msg.id = r.read_bytes(bytes).map(Cow::Borrowed)?,
+                Ok(18) => msg.addrs.push(r.read_bytes(bytes).map(Cow::Borrowed)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -254,7 +255,7 @@ impl<'a> MessageRead<'a> for Peer {
     }
 }
 
-impl MessageWrite for Peer {
+impl<'a> MessageWrite for Peer<'a> {
     fn get_size(&self) -> usize {
         0
         + 1 + sizeof_len((&self.id).len())
@@ -270,20 +271,20 @@ impl MessageWrite for Peer {
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct Reservation {
+pub struct Reservation<'a> {
     pub expire: u64,
-    pub addrs: Vec<Vec<u8>>,
-    pub voucher: Option<Vec<u8>>,
+    pub addrs: Vec<Cow<'a, [u8]>>,
+    pub voucher: Option<Cow<'a, [u8]>>,
 }
 
-impl<'a> MessageRead<'a> for Reservation {
+impl<'a> MessageRead<'a> for Reservation<'a> {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
             match r.next_tag(bytes) {
                 Ok(8) => msg.expire = r.read_uint64(bytes)?,
-                Ok(18) => msg.addrs.push(r.read_bytes(bytes)?.to_owned()),
-                Ok(26) => msg.voucher = Some(r.read_bytes(bytes)?.to_owned()),
+                Ok(18) => msg.addrs.push(r.read_bytes(bytes).map(Cow::Borrowed)?),
+                Ok(26) => msg.voucher = Some(r.read_bytes(bytes).map(Cow::Borrowed)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -292,7 +293,7 @@ impl<'a> MessageRead<'a> for Reservation {
     }
 }
 
-impl MessageWrite for Reservation {
+impl<'a> MessageWrite for Reservation<'a> {
     fn get_size(&self) -> usize {
         0
         + 1 + sizeof_varint(*(&self.expire) as u64)

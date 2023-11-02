@@ -9,32 +9,33 @@
 #![cfg_attr(rustfmt, rustfmt_skip)]
 
 
+use std::borrow::Cow;
 use quick_protobuf::{MessageInfo, MessageRead, MessageWrite, BytesReader, Writer, WriterBackend, Result};
 use quick_protobuf::sizeofs::*;
 use super::*;
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct Identify {
-    pub protocolVersion: Option<String>,
-    pub agentVersion: Option<String>,
-    pub publicKey: Option<Vec<u8>>,
-    pub listenAddrs: Vec<Vec<u8>>,
-    pub observedAddr: Option<Vec<u8>>,
-    pub protocols: Vec<String>,
+pub struct Identify<'a> {
+    pub protocolVersion: Option<Cow<'a, str>>,
+    pub agentVersion: Option<Cow<'a, str>>,
+    pub publicKey: Option<Cow<'a, [u8]>>,
+    pub listenAddrs: Vec<Cow<'a, [u8]>>,
+    pub observedAddr: Option<Cow<'a, [u8]>>,
+    pub protocols: Vec<Cow<'a, str>>,
 }
 
-impl<'a> MessageRead<'a> for Identify {
+impl<'a> MessageRead<'a> for Identify<'a> {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
             match r.next_tag(bytes) {
-                Ok(42) => msg.protocolVersion = Some(r.read_string(bytes)?.to_owned()),
-                Ok(50) => msg.agentVersion = Some(r.read_string(bytes)?.to_owned()),
-                Ok(10) => msg.publicKey = Some(r.read_bytes(bytes)?.to_owned()),
-                Ok(18) => msg.listenAddrs.push(r.read_bytes(bytes)?.to_owned()),
-                Ok(34) => msg.observedAddr = Some(r.read_bytes(bytes)?.to_owned()),
-                Ok(26) => msg.protocols.push(r.read_string(bytes)?.to_owned()),
+                Ok(42) => msg.protocolVersion = Some(r.read_string(bytes).map(Cow::Borrowed)?),
+                Ok(50) => msg.agentVersion = Some(r.read_string(bytes).map(Cow::Borrowed)?),
+                Ok(10) => msg.publicKey = Some(r.read_bytes(bytes).map(Cow::Borrowed)?),
+                Ok(18) => msg.listenAddrs.push(r.read_bytes(bytes).map(Cow::Borrowed)?),
+                Ok(34) => msg.observedAddr = Some(r.read_bytes(bytes).map(Cow::Borrowed)?),
+                Ok(26) => msg.protocols.push(r.read_string(bytes).map(Cow::Borrowed)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -43,7 +44,7 @@ impl<'a> MessageRead<'a> for Identify {
     }
 }
 
-impl MessageWrite for Identify {
+impl<'a> MessageWrite for Identify<'a> {
     fn get_size(&self) -> usize {
         0
         + self.protocolVersion.as_ref().map_or(0, |m| 1 + sizeof_len((m).len()))

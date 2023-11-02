@@ -9,32 +9,33 @@
 #![cfg_attr(rustfmt, rustfmt_skip)]
 
 
+use std::borrow::Cow;
 use quick_protobuf::{MessageInfo, MessageRead, MessageWrite, BytesReader, Writer, WriterBackend, Result};
 use quick_protobuf::sizeofs::*;
 use super::super::*;
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct Message {
-    pub from: Option<Vec<u8>>,
-    pub data: Option<Vec<u8>>,
-    pub seqno: Option<Vec<u8>>,
-    pub topic_ids: Vec<String>,
-    pub signature: Option<Vec<u8>>,
-    pub key: Option<Vec<u8>>,
+pub struct Message<'a> {
+    pub from: Option<Cow<'a, [u8]>>,
+    pub data: Option<Cow<'a, [u8]>>,
+    pub seqno: Option<Cow<'a, [u8]>>,
+    pub topic_ids: Vec<Cow<'a, str>>,
+    pub signature: Option<Cow<'a, [u8]>>,
+    pub key: Option<Cow<'a, [u8]>>,
 }
 
-impl<'a> MessageRead<'a> for Message {
+impl<'a> MessageRead<'a> for Message<'a> {
     fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> Result<Self> {
         let mut msg = Self::default();
         while !r.is_eof() {
             match r.next_tag(bytes) {
-                Ok(10) => msg.from = Some(r.read_bytes(bytes)?.to_owned()),
-                Ok(18) => msg.data = Some(r.read_bytes(bytes)?.to_owned()),
-                Ok(26) => msg.seqno = Some(r.read_bytes(bytes)?.to_owned()),
-                Ok(34) => msg.topic_ids.push(r.read_string(bytes)?.to_owned()),
-                Ok(42) => msg.signature = Some(r.read_bytes(bytes)?.to_owned()),
-                Ok(50) => msg.key = Some(r.read_bytes(bytes)?.to_owned()),
+                Ok(10) => msg.from = Some(r.read_bytes(bytes).map(Cow::Borrowed)?),
+                Ok(18) => msg.data = Some(r.read_bytes(bytes).map(Cow::Borrowed)?),
+                Ok(26) => msg.seqno = Some(r.read_bytes(bytes).map(Cow::Borrowed)?),
+                Ok(34) => msg.topic_ids.push(r.read_string(bytes).map(Cow::Borrowed)?),
+                Ok(42) => msg.signature = Some(r.read_bytes(bytes).map(Cow::Borrowed)?),
+                Ok(50) => msg.key = Some(r.read_bytes(bytes).map(Cow::Borrowed)?),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -43,7 +44,7 @@ impl<'a> MessageRead<'a> for Message {
     }
 }
 
-impl MessageWrite for Message {
+impl<'a> MessageWrite for Message<'a> {
     fn get_size(&self) -> usize {
         0
         + self.from.as_ref().map_or(0, |m| 1 + sizeof_len((m).len()))

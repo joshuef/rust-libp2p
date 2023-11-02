@@ -70,9 +70,17 @@ mod peer_id;
     feature = "ed25519",
     feature = "rsa"
 ))]
-impl zeroize::Zeroize for proto::PrivateKey {
+impl zeroize::Zeroize for proto::PrivateKey<'static> {
     fn zeroize(&mut self) {
-        self.Data.zeroize();
+        // If the data is owned, we can zeroize it directly.
+        if let std::borrow::Cow::Owned(ref mut v) = self.Data {
+            v.zeroize();
+        }
+        // If the data is borrowed, we cannot zeroize it directly.
+        // Instead, we replace it with an empty vector, which will be zeroized when dropped.
+        else {
+            self.Data = std::borrow::Cow::Owned(vec![]);
+        }
     }
 }
 
@@ -82,28 +90,28 @@ impl zeroize::Zeroize for proto::PrivateKey {
     feature = "ed25519",
     feature = "rsa"
 ))]
-impl From<&PublicKey> for proto::PublicKey {
+impl From<&PublicKey> for proto::PublicKey<'static> {
     fn from(key: &PublicKey) -> Self {
         match &key.publickey {
             #[cfg(feature = "ed25519")]
             keypair::PublicKeyInner::Ed25519(key) => proto::PublicKey {
                 Type: proto::KeyType::Ed25519,
-                Data: key.to_bytes().to_vec(),
+                Data: std::borrow::Cow::Owned(key.to_bytes().to_vec()),
             },
             #[cfg(all(feature = "rsa", not(target_arch = "wasm32")))]
             keypair::PublicKeyInner::Rsa(key) => proto::PublicKey {
                 Type: proto::KeyType::RSA,
-                Data: key.encode_x509(),
+                Data: std::borrow::Cow::Owned(key.encode_x509()),
             },
             #[cfg(feature = "secp256k1")]
             keypair::PublicKeyInner::Secp256k1(key) => proto::PublicKey {
                 Type: proto::KeyType::Secp256k1,
-                Data: key.to_bytes().to_vec(),
+                Data: std::borrow::Cow::Owned(key.to_bytes().to_vec()),
             },
             #[cfg(feature = "ecdsa")]
             keypair::PublicKeyInner::Ecdsa(key) => proto::PublicKey {
                 Type: proto::KeyType::ECDSA,
-                Data: key.encode_der(),
+                Data: std::borrow::Cow::Owned(key.encode_der()),
             },
         }
     }

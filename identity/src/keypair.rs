@@ -40,6 +40,7 @@ use crate::proto;
     feature = "rsa"
 ))]
 use quick_protobuf::{BytesReader, Writer};
+use std::borrow::Cow;
 #[cfg(any(
     feature = "ecdsa",
     feature = "secp256k1",
@@ -228,19 +229,19 @@ impl Keypair {
                 #[cfg(feature = "ed25519")]
                 KeyPairInner::Ed25519(ref data) => proto::PrivateKey {
                     Type: proto::KeyType::Ed25519,
-                    Data: data.to_bytes().to_vec(),
+                    Data: std::borrow::Cow::Owned(data.to_bytes().to_vec()),
                 },
                 #[cfg(all(feature = "rsa", not(target_arch = "wasm32")))]
                 KeyPairInner::Rsa(_) => return Err(DecodingError::encoding_unsupported("RSA")),
                 #[cfg(feature = "secp256k1")]
                 KeyPairInner::Secp256k1(ref data) => proto::PrivateKey {
                     Type: proto::KeyType::Secp256k1,
-                    Data: data.secret().to_bytes().to_vec(),
+                    Data: std::borrow::Cow::Owned(data.secret().to_bytes().to_vec()),
                 },
                 #[cfg(feature = "ecdsa")]
                 KeyPairInner::Ecdsa(ref data) => proto::PrivateKey {
                     Type: proto::KeyType::ECDSA,
-                    Data: data.secret().encode_der(),
+                    Data: std::borrow::Cow::Owned(data.secret().encode_der()),
                 },
             };
 
@@ -606,7 +607,7 @@ impl PublicKey {
     /// Decode a public key from a protobuf structure, e.g. read from storage
     /// or received from another node.
     #[allow(unused_variables)]
-    pub fn try_decode_protobuf(bytes: &[u8]) -> Result<PublicKey, DecodingError> {
+    pub fn try_decode_protobuf(bytes: Cow<[u8]>) -> Result<PublicKey, DecodingError> {
         #[cfg(any(
             feature = "ecdsa",
             feature = "secp256k1",
@@ -615,9 +616,10 @@ impl PublicKey {
         ))]
         {
             use quick_protobuf::MessageRead;
-            let mut reader = BytesReader::from_bytes(bytes);
+            let owned_bytes= bytes.into_owned();
+            let mut reader = BytesReader::from_bytes(&owned_bytes);
 
-            let pubkey = proto::PublicKey::from_reader(&mut reader, bytes)
+            let pubkey = proto::PublicKey::from_reader(&mut reader, &owned_bytes)
                 .map_err(|e| DecodingError::bad_protobuf("public key bytes", e))?;
 
             pubkey.try_into()
@@ -659,7 +661,7 @@ impl PublicKey {
     feature = "ed25519",
     feature = "rsa"
 ))]
-impl TryFrom<proto::PublicKey> for PublicKey {
+impl TryFrom<proto::PublicKey<'static>> for PublicKey {
     type Error = DecodingError;
 
     fn try_from(pubkey: proto::PublicKey) -> Result<Self, Self::Error> {

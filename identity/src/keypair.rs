@@ -616,10 +616,9 @@ impl PublicKey {
         ))]
         {
             use quick_protobuf::MessageRead;
-            let owned_bytes= bytes.into_owned();
-            let mut reader = BytesReader::from_bytes(&owned_bytes);
+            let mut reader = BytesReader::from_bytes(&bytes);
 
-            let pubkey = proto::PublicKey::from_reader(&mut reader, &owned_bytes)
+            let pubkey = proto::PublicKey::from_reader(&mut reader, &bytes)
                 .map_err(|e| DecodingError::bad_protobuf("public key bytes", e))?;
 
             pubkey.try_into()
@@ -661,7 +660,7 @@ impl PublicKey {
     feature = "ed25519",
     feature = "rsa"
 ))]
-impl TryFrom<proto::PublicKey<'static>> for PublicKey {
+impl <'a>TryFrom<proto::PublicKey<'a>> for PublicKey {
     type Error = DecodingError;
 
     fn try_from(pubkey: proto::PublicKey) -> Result<Self, Self::Error> {

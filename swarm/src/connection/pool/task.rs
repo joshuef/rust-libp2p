@@ -212,7 +212,12 @@ pub(crate) async fn new_for_established_connection<THandler>(
             },
 
             // The manager has disappeared; abort.
-            Either::Left((None, _)) => return,
+            Either::Left((None, _)) => {
+                tracing::warn!("Manager disappeared; aborting connection");
+                let (remaining_events, closing_muxer) = connection.close();
+
+                return
+            },
 
             Either::Right((event, _)) => {
                 match event {

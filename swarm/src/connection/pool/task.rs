@@ -175,6 +175,8 @@ pub(crate) async fn new_for_established_connection<THandler>(
 ) where
     THandler: ConnectionHandler,
 {
+
+    tracing::info!("New connection {connection_id:?} to {peer_id:?}");
     loop {
         match futures::future::select(
             command_receiver.next(),

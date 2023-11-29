@@ -187,6 +187,7 @@ pub(crate) async fn new_for_established_connection<THandler>(
             Either::Left((Some(command), _)) => match command {
                 Command::NotifyHandler(event) => connection.on_behaviour_event(event),
                 Command::Close => {
+                    tracing::info!("Closing connection {connection_id:?} to {peer_id:?}");
                     command_receiver.close();
                     let (remaining_events, closing_muxer) = connection.close();
 
